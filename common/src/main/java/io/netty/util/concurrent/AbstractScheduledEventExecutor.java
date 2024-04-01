@@ -38,6 +38,9 @@ public abstract class AbstractScheduledEventExecutor extends AbstractEventExecut
                 }
             };
 
+    /**
+     * 定时任务队列（数组的最小顶堆实现）
+     */
     PriorityQueue<ScheduledFutureTask<?>> scheduledTaskQueue;
 
     protected AbstractScheduledEventExecutor() {
@@ -96,7 +99,8 @@ public abstract class AbstractScheduledEventExecutor extends AbstractEventExecut
 
     /**
      * Return the {@link Runnable} which is ready to be executed with the given {@code nanoTime}.
-     * You should use {@link #nanoTime()} to retrieve the correct {@code nanoTime}.
+     * You should use {@link #nanoTime()} to retrieve the correct {@code nanoTime}. <p/>
+     * 弹出定时任务队列中运行事件已到达的任务
      */
     protected final Runnable pollScheduledTask(long nanoTime) {
         assert inEventLoop();

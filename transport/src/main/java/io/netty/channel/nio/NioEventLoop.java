@@ -126,6 +126,12 @@ public final class NioEventLoop extends SingleThreadEventLoop {
 
     private final SelectStrategy selectStrategy;
 
+    /**
+     * 处理io事件的时间所用的百分比 <p/>
+     * 因为当前EventLoop既要处理Channel相关的事件（io事件），也要处理我们提交的线程池接口任务和定时任务<br/>
+     * 所以，这个数字代表了一次处理io事件的时间占总时间的百分比 <p/>
+     * 默认时平均的
+     */
     private volatile int ioRatio = 50;
     private int cancelledKeys;
     private boolean needsToSelectAgain;
@@ -169,6 +175,7 @@ public final class NioEventLoop extends SingleThreadEventLoop {
             throw new ChannelException("failed to open a new selector", e);
         }
 
+        // 默认不会禁用selectKe的优化
         if (DISABLE_KEY_SET_OPTIMIZATION) {
             return new SelectorTuple(unwrappedSelector);
         }
@@ -200,6 +207,7 @@ public final class NioEventLoop extends SingleThreadEventLoop {
         final Class<?> selectorImplClass = (Class<?>) maybeSelectorImplClass;
         final SelectedSelectionKeySet selectedKeySet = new SelectedSelectionKeySet();
 
+        // selectKey的优化，反射用数组代替了hashset，且不支持直接remove,每次select都reset，提高速度
         Object maybeException = AccessController.doPrivileged(new PrivilegedAction<Object>() {
             @Override
             public Object run() {
@@ -488,10 +496,12 @@ public final class NioEventLoop extends SingleThreadEventLoop {
                 } else {
                     final long ioStartTime = System.nanoTime();
                     try {
+                        // 处理IO事件，selector
                         processSelectedKeys();
                     } finally {
                         // Ensure we always run tasks.
                         final long ioTime = System.nanoTime() - ioStartTime;
+                        // 处理队列的task，花费时间为IO用时的ioRatio剩余的百分比
                         runAllTasks(ioTime * (100 - ioRatio) / ioRatio);
                     }
                 }
@@ -658,6 +668,7 @@ public final class NioEventLoop extends SingleThreadEventLoop {
             if ((readyOps & SelectionKey.OP_CONNECT) != 0) {
                 // remove OP_CONNECT as otherwise Selector.select(..) will always return without blocking
                 // See https://github.com/netty/netty/issues/924
+                // 取消OP_CONNECT时间的监听
                 int ops = k.interestOps();
                 ops &= ~SelectionKey.OP_CONNECT;
                 k.interestOps(ops);
@@ -674,6 +685,9 @@ public final class NioEventLoop extends SingleThreadEventLoop {
             // Also check for readOps of 0 to workaround possible JDK bug which may otherwise lead
             // to a spin loop
             if ((readyOps & (SelectionKey.OP_READ | SelectionKey.OP_ACCEPT)) != 0 || readyOps == 0) {
+                // Read或Accept事件触发，根据不同的Channel去做不同的事
+                // SocketChannel是读取数据并触发ChannelRead等方法
+                // ServerSocketChannel是接受新的连接构造成SocketChannel，并设置好各种参数，最终注册到EventLoop中
                 unsafe.read();
             }
         } catch (CancelledKeyException ignored) {
@@ -736,6 +750,7 @@ public final class NioEventLoop extends SingleThreadEventLoop {
 
     @Override
     protected void wakeup(boolean inEventLoop) {
+        // 在NIO中，需要唤醒selector
         if (!inEventLoop && wakenUp.compareAndSet(false, true)) {
             selector.wakeup();
         }
@@ -764,6 +779,7 @@ public final class NioEventLoop extends SingleThreadEventLoop {
             long selectDeadLineNanos = currentTimeNanos + delayNanos(currentTimeNanos);
 
             for (;;) {
+                // 定时检测Selector的时间
                 long timeoutMillis = (selectDeadLineNanos - currentTimeNanos + 500000L) / 1000000L;
                 if (timeoutMillis <= 0) {
                     if (selectCnt == 0) {
@@ -782,10 +798,13 @@ public final class NioEventLoop extends SingleThreadEventLoop {
                     selectCnt = 1;
                     break;
                 }
-
+                // 定时阻塞选择
                 int selectedKeys = selector.select(timeoutMillis);
                 selectCnt ++;
-
+                // 以下情况就跳出循环，退出定时阻塞
+                // 1、有准备好的IO事件
+                // 2、被用户唤醒
+                // 3、存在任务或定时任务
                 if (selectedKeys != 0 || oldWakenUp || wakenUp.get() || hasTasks() || hasScheduledTasks()) {
                     // - Selected something,
                     // - waken up by user, or

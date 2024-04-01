@@ -82,7 +82,8 @@ public interface Channel extends AttributeMap, ChannelOutboundInvoker, Comparabl
     ChannelId id();
 
     /**
-     * Return the {@link EventLoop} this {@link Channel} was registered to.
+     * Return the {@link EventLoop} this {@link Channel} was registered to. <><p/>
+     * 返回分配给 当前Channel 的 EventLoop
      */
     EventLoop eventLoop();
 
@@ -110,7 +111,9 @@ public interface Channel extends AttributeMap, ChannelOutboundInvoker, Comparabl
     boolean isRegistered();
 
     /**
-     * Return {@code true} if the {@link Channel} is active and so connected.
+     * Return {@code true} if the {@link Channel} is active and so connected.<p/>
+     * 对于ServerSocketChannel，表示绑定了地址和端口。
+     * 对于SocketChannel，代表已经连接了服务端
      */
     boolean isActive();
 
@@ -123,7 +126,8 @@ public interface Channel extends AttributeMap, ChannelOutboundInvoker, Comparabl
      * Returns the local address where this channel is bound to.  The returned
      * {@link SocketAddress} is supposed to be down-cast into more concrete
      * type such as {@link InetSocketAddress} to retrieve the detailed
-     * information.
+     * information. <><p/>
+     * 返回本地的 SokcetAddress
      *
      * @return the local address of this channel.
      *         {@code null} if this channel is not bound.
@@ -134,8 +138,9 @@ public interface Channel extends AttributeMap, ChannelOutboundInvoker, Comparabl
      * Returns the remote address where this channel is connected to.  The
      * returned {@link SocketAddress} is supposed to be down-cast into more
      * concrete type such as {@link InetSocketAddress} to retrieve the detailed
-     * information.
-     *
+     * information.<p/>
+     * 返回远程的 SocketAddress。
+     * 对于server端来说，没有远端地址，返回null
      * @return the remote address of this channel.
      *         {@code null} if this channel is not connected.
      *         If this channel is not connected but it can receive messages
@@ -178,7 +183,8 @@ public interface Channel extends AttributeMap, ChannelOutboundInvoker, Comparabl
     Unsafe unsafe();
 
     /**
-     * Return the assigned {@link ChannelPipeline}.
+     * Return the assigned {@link ChannelPipeline}. <><p/>
+     * 返回分配给 当前Channel 的 ChannelPipeline
      */
     ChannelPipeline pipeline();
 

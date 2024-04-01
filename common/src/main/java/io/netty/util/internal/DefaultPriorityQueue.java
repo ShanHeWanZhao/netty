@@ -32,6 +32,10 @@ public final class DefaultPriorityQueue<T extends PriorityQueueNode> extends Abs
                                                                      implements PriorityQueue<T> {
     private static final PriorityQueueNode[] EMPTY_ARRAY = new PriorityQueueNode[0];
     private final Comparator<T> comparator;
+
+    /**
+     * ScheduledFutureTask数组，也是基于最小顶堆实现首节点时最近需要被执行的任务
+     */
     private T[] queue;
     private int size;
 

@@ -61,9 +61,18 @@ public class DefaultChannelPipeline implements ChannelPipeline {
     private static final AtomicReferenceFieldUpdater<DefaultChannelPipeline, MessageSizeEstimator.Handle> ESTIMATOR =
             AtomicReferenceFieldUpdater.newUpdater(
                     DefaultChannelPipeline.class, MessageSizeEstimator.Handle.class, "estimatorHandle");
+    /**
+     * 固定的head，实现为HeadContext
+     */
     final AbstractChannelHandlerContext head;
+    /**
+     * 固定的tail，实现为TailContext
+     */
     final AbstractChannelHandlerContext tail;
 
+    /**
+     * 和当前pipeline关联的Channel
+     */
     private final Channel channel;
     private final ChannelFuture succeededFuture;
     private final VoidChannelPromise voidPromise;
@@ -156,22 +165,24 @@ public class DefaultChannelPipeline implements ChannelPipeline {
     public final ChannelPipeline addFirst(EventExecutorGroup group, String name, ChannelHandler handler) {
         final AbstractChannelHandlerContext newCtx;
         synchronized (this) {
+            // 检查这个handler是否可以被多线程共享（被@Sharable标记）。避免多实例共享了不可共享的对象
             checkMultiplicity(handler);
+            // 创建name并检查重名
             name = filterName(name, handler);
-
+            // 创建handlerContext
             newCtx = newContext(group, name, handler);
-
+            // 添加到pipeline中
             addFirst0(newCtx);
 
             // If the registered is false it means that the channel was not registered on an eventLoop yet.
             // In this case we add the context to the pipeline and add a task that will call
             // ChannelHandler.handlerAdded(...) once the channel is registered.
-            if (!registered) {
+            if (!registered) { // 表示当前channel还未注册到eventLoop中，添加个handlerAdded的回调接口就直接返回
                 newCtx.setAddPending();
                 callHandlerCallbackLater(newCtx, true);
                 return this;
             }
-
+            // channel已经注册到eventLoop中，根据当前线程是否是eventLoop线程来决定是否直接调用handlerAdded事件
             EventExecutor executor = newCtx.executor();
             if (!executor.inEventLoop()) {
                 callHandlerAddedInEventLoop(newCtx, executor);
@@ -208,6 +219,8 @@ public class DefaultChannelPipeline implements ChannelPipeline {
             // If the registered is false it means that the channel was not registered on an eventLoop yet.
             // In this case we add the context to the pipeline and add a task that will call
             // ChannelHandler.handlerAdded(...) once the channel is registered.
+            // 当前channel还未注册到selector，修改当前ChannelHandlerContext对象状态为addPending,代表待添加。
+            // 在注册一个回调函数
             if (!registered) {
                 newCtx.setAddPending();
                 callHandlerCallbackLater(newCtx, true);
@@ -224,6 +237,11 @@ public class DefaultChannelPipeline implements ChannelPipeline {
         return this;
     }
 
+    /**
+     * 将目标HandlerContext放在末尾 <p/>
+     * 注意：tail是固定的末尾，所以其实是放做为tail的前一个节点
+     * @param newCtx
+     */
     private void addLast0(AbstractChannelHandlerContext newCtx) {
         AbstractChannelHandlerContext prev = tail.prev;
         newCtx.prev = prev;
@@ -1329,6 +1347,7 @@ public class DefaultChannelPipeline implements ChannelPipeline {
         @Override
         public void bind(
                 ChannelHandlerContext ctx, SocketAddress localAddress, ChannelPromise promise) {
+            // channel绑定地址和端口
             unsafe.bind(localAddress, promise);
         }
 
@@ -1393,8 +1412,11 @@ public class DefaultChannelPipeline implements ChannelPipeline {
 
         @Override
         public void channelActive(ChannelHandlerContext ctx) {
+            // 向后传播active事件，直到所有handler均处理完这个事件，才考虑下面的设置当前Channel感兴趣的事件
             ctx.fireChannelActive();
-
+            // 设置了autoRead，则开启ChannelOutboundInvoker的read事件
+            // 对于SocketChannel，会注册SelectionKey.OP_READ
+            // 对于ServerSocketChannel，会注册SelectionKey.OP_ACCEPT
             readIfIsAutoRead();
         }
 

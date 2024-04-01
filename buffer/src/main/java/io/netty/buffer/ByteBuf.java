@@ -412,7 +412,8 @@ public abstract class ByteBuf implements ReferenceCounted, Comparable<ByteBuf> {
 
     /**
      * Returns the number of writable bytes which is equal to
-     * {@code (this.capacity - this.writerIndex)}.
+     * {@code (this.capacity - this.writerIndex)}. <p/>
+     * 返回剩余可写入的byte数据长度
      */
     public abstract int writableBytes();
 
@@ -2198,7 +2199,9 @@ public abstract class ByteBuf implements ReferenceCounted, Comparable<ByteBuf> {
      * this buffer.
      * <p>
      * Also be aware that this method will NOT call {@link #retain()} and so the
-     * reference count will NOT be increased.
+     * reference count will NOT be increased. <><p/>
+     * 返回一个新的ByteBuf，它具有自己的读索引、写索引和标记索引。
+     * 但实际内容是共享的，意味着对新的ByteBuf内容做修改，原来的ByteBuf内容也会被修改
      */
     public abstract ByteBuf slice(int index, int length);
 

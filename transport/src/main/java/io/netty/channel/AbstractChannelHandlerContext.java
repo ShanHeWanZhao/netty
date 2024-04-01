@@ -39,22 +39,34 @@ abstract class AbstractChannelHandlerContext extends DefaultAttributeMap
         implements ChannelHandlerContext, ResourceLeakHint {
 
     private static final InternalLogger logger = InternalLoggerFactory.getInstance(AbstractChannelHandlerContext.class);
+    /**
+     * 上一个HandlerContext节点
+     */
     volatile AbstractChannelHandlerContext next;
+    /**
+     * 下一个HandlerContext节点
+     */
     volatile AbstractChannelHandlerContext prev;
 
     private static final AtomicIntegerFieldUpdater<AbstractChannelHandlerContext> HANDLER_STATE_UPDATER =
             AtomicIntegerFieldUpdater.newUpdater(AbstractChannelHandlerContext.class, "handlerState");
 
     /**
-     * {@link ChannelHandler#handlerAdded(ChannelHandlerContext)} is about to be called.
+     * {@link ChannelHandler#handlerAdded(ChannelHandlerContext)} is about to be called. <p/>
+     * 此时handler已经添加到pipeline中了，但对应的Channel还未注册<p/>
+     * 注意，一般Channel的事件都有个顺序：
+     * Channel注册到选择器 -> handlerAdded
+     * 此状态
      */
     private static final int ADD_PENDING = 1;
     /**
-     * {@link ChannelHandler#handlerAdded(ChannelHandlerContext)} was called.
+     * {@link ChannelHandler#handlerAdded(ChannelHandlerContext)} was called. <p/>
+     * 当前handler已经添加到Pipeline中了且对应的Channel已经注册（handlerAdded事件已经调用）
      */
     private static final int ADD_COMPLETE = 2;
     /**
-     * {@link ChannelHandler#handlerRemoved(ChannelHandlerContext)} was called.
+     * {@link ChannelHandler#handlerRemoved(ChannelHandlerContext)} was called. <p/>
+     * 当前handler已从pipeline中移除
      */
     private static final int REMOVE_COMPLETE = 3;
     /**
@@ -67,6 +79,12 @@ abstract class AbstractChannelHandlerContext extends DefaultAttributeMap
     private final boolean outbound;
     private final DefaultChannelPipeline pipeline;
     private final String name;
+    /**
+     * 是否按顺序调用当前handler的事件 <p/>
+     * 比如：handler首先是被加入到pipeline中，触发handlerAdded事件. <br/>
+     * 如果刚添加到pipeline中，还未触发handlerAdded事件时，当前channel就触发了其他事件（比如read），
+     * 就会检查当前字段来确定使用调用channel触发事件。
+     */
     private final boolean ordered;
 
     // Will be set to null if no child executor should be used, otherwise it will be set to the
@@ -972,10 +990,12 @@ abstract class AbstractChannelHandlerContext extends DefaultAttributeMap
      *
      * If this method returns {@code false} we will not invoke the {@link ChannelHandler} but just forward the event.
      * This is needed as {@link DefaultChannelPipeline} may already put the {@link ChannelHandler} in the linked-list
-     * but not called {@link ChannelHandler#handlerAdded(ChannelHandlerContext)}.
+     * but not called {@link ChannelHandler#handlerAdded(ChannelHandlerContext)}. <><p/>
+     * 检查是否可以调用handler了
      */
     private boolean invokeHandler() {
         // Store in local variable to reduce volatile reads.
+        // 避免多此读取volatile字段
         int handlerState = this.handlerState;
         return handlerState == ADD_COMPLETE || (!ordered && handlerState == ADD_PENDING);
     }

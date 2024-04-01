@@ -161,7 +161,6 @@ public interface ChannelConfig {
      *         if the specified value is {@code 0} or less than {@code 0}
      */
     ChannelConfig setWriteSpinCount(int writeSpinCount);
-
     /**
      * Returns {@link ByteBufAllocator} which is used for the channel
      * to allocate buffers.

@@ -55,6 +55,12 @@ public abstract class AbstractNioMessageChannel extends AbstractNioChannel {
         super.doBeginRead();
     }
 
+    /**
+     * 重写了read方法，适用于NioSererSocketChannel.<br/>
+     * 这个read方法负责接受新的连接，创建对应的SocketChannel，
+     * 并通过channelRead将其传播给NioSererSocketChannel的专属handler -> ServerBootstrapAcceptor，
+     * 用来将这个SocketChannel注册到EventGroup中并设置对应参数和handler
+     */
     private final class NioMessageUnsafe extends AbstractNioUnsafe {
 
         private final List<Object> readBuf = new ArrayList<Object>();

@@ -46,6 +46,7 @@ public abstract class AbstractNioByteChannel extends AbstractNioChannel {
             " (expected: " + StringUtil.simpleClassName(ByteBuf.class) + ", " +
             StringUtil.simpleClassName(FileRegion.class) + ')';
 
+    // 负责刷新发送缓存链表中的数据
     private final Runnable flushTask = new Runnable() {
         @Override
         public void run() {
@@ -128,6 +129,9 @@ public abstract class AbstractNioByteChannel extends AbstractNioChannel {
             }
         }
 
+        /**
+         * NioSocketChannel的读取，真正的从Channel中读取数据
+         */
         @Override
         public final void read() {
             final ChannelConfig config = config();
@@ -144,12 +148,16 @@ public abstract class AbstractNioByteChannel extends AbstractNioChannel {
             boolean close = false;
             try {
                 do {
+                    // 由于我们不知道当前Channel能读取到多少字节的数据，所以需要分配一个估值容量的ByteBuf（容量过大会浪费，容量过小会读取多次）
+                    // 根据配置参数分配一个具有特定容量ByteBuf，当这个ByteBuf容量小于Channel中的数据时，就会触发多次读取
                     byteBuf = allocHandle.allocate(allocator);
+                    // 将Channel中的数据读取到ByteBuf中，并且设置读取到的字节数带线啊哦
                     allocHandle.lastBytesRead(doReadBytes(byteBuf));
-                    if (allocHandle.lastBytesRead() <= 0) {
+                    if (allocHandle.lastBytesRead() <= 0) { // 没有读取到数据
                         // nothing was read. release the buffer.
                         byteBuf.release();
                         byteBuf = null;
+                        // 读取的字节数小于0，代表Channel已关闭
                         close = allocHandle.lastBytesRead() < 0;
                         if (close) {
                             // There is nothing left to read as we received an EOF.
@@ -157,13 +165,14 @@ public abstract class AbstractNioByteChannel extends AbstractNioChannel {
                         }
                         break;
                     }
-
+                    // 读取数据的次数 + 1
                     allocHandle.incMessagesRead(1);
                     readPending = false;
+                    // 传入读取到的ByteBuf作为参数，触发ChannelRead事件
                     pipeline.fireChannelRead(byteBuf);
                     byteBuf = null;
                 } while (allocHandle.continueReading());
-
+                // 这次Channel发送的数据已被读取完毕，触发readComplete事件
                 allocHandle.readComplete();
                 pipeline.fireChannelReadComplete();
 
@@ -249,18 +258,24 @@ public abstract class AbstractNioByteChannel extends AbstractNioChannel {
 
     @Override
     protected void doWrite(ChannelOutboundBuffer in) throws Exception {
+        // 获取循环发送的次数，默认16
         int writeSpinCount = config().getWriteSpinCount();
         do {
+            // 获取写缓存链表中第一条要写入的数据
             Object msg = in.current();
+            // 如果没有要写入的数据，取消注册到 selector 上的 OP_WRITE 事件。
             if (msg == null) {
                 // Wrote all messages.
                 clearOpWrite();
                 // Directly return here so incompleteWrite(...) is not called.
                 return;
             }
+            // 写入消息
             writeSpinCount -= doWriteInternal(in, msg);
         } while (writeSpinCount > 0);
 
+        // 如果未发送完成则在 selector 上注册 OP_WRITE 事件。
+        // 如果发送完成则在 selector 上取消 OP_WRITE 事件。
         incompleteWrite(writeSpinCount < 0);
     }
 
@@ -308,7 +323,8 @@ public abstract class AbstractNioByteChannel extends AbstractNioChannel {
     protected abstract long doWriteFileRegion(FileRegion region) throws Exception;
 
     /**
-     * Read bytes into the given {@link ByteBuf} and return the amount.
+     * Read bytes into the given {@link ByteBuf} and return the amount. <p/>
+     * 将当前Channel的数据读取到指定的ByteBuf中，并返回读取的字节数
      */
     protected abstract int doReadBytes(ByteBuf buf) throws Exception;
 

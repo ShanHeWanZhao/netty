@@ -46,15 +46,33 @@ import java.util.Map;
  *
  * <p>When not used in a {@link ServerBootstrap} context, the {@link #bind()} methods are useful for connectionless
  * transports such as datagram (UDP).</p>
+ * Bootstrap的抽象，定义了服务端和客户端各自的Bootstrap所需要的公共东西
  */
 public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C extends Channel> implements Cloneable {
 
+    /**
+     * super group <p/>
+     * 对于服务端的socket来说是用来构建ServerSocketChannel，处理和客户端的连接事件 <p/>
+     * 对于客户端的socket来说，是用来构建SocketChannel，处理和服务端的读写
+     */
     volatile EventLoopGroup group;
+    /**
+     * channel实例化工厂，默认为ReflectiveChannelFactory
+     */
     @SuppressWarnings("deprecation")
     private volatile ChannelFactory<? extends C> channelFactory;
     private volatile SocketAddress localAddress;
+    /**
+     * 当前socket参数设置
+     */
     private final Map<ChannelOption<?>, Object> options = new LinkedHashMap<ChannelOption<?>, Object>();
     private final Map<AttributeKey<?>, Object> attrs = new LinkedHashMap<AttributeKey<?>, Object>();
+    /**
+     * 当前socket类型产生的Channel会使用的ChannelHandler <p/>
+     * 客户端：就是用在SocketChannel上的Handler <br/>
+     * 服务端：使用在ServerSocketChannel上的Handler <br/>
+     * 因为这里只有一个ChannelHandler，所以最好使用ChannelInitializer，用来注册多个ChannelHandler
+     */
     private volatile ChannelHandler handler;
 
     AbstractBootstrap() {
@@ -281,16 +299,16 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
     private ChannelFuture doBind(final SocketAddress localAddress) {
         final ChannelFuture regFuture = initAndRegister();
         final Channel channel = regFuture.channel();
-        if (regFuture.cause() != null) {
+        if (regFuture.cause() != null) { // 在判断是否出现了异常（有可能还没完成）
             return regFuture;
         }
 
-        if (regFuture.isDone()) {
+        if (regFuture.isDone()) { // 注册成功
             // At this point we know that the registration was complete and successful.
             ChannelPromise promise = channel.newPromise();
             doBind0(regFuture, channel, localAddress, promise);
             return promise;
-        } else {
+        } else { // 注册还未成功，添加监听器并根据Future的结果来决定下一步操作
             // Registration future is almost always fulfilled already, but just in case it's not.
             final PendingRegistrationPromise promise = new PendingRegistrationPromise(channel);
             regFuture.addListener(new ChannelFutureListener() {
@@ -317,7 +335,9 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
     final ChannelFuture initAndRegister() {
         Channel channel = null;
         try {
+            // 反射创建Channel
             channel = channelFactory.newChannel();
+            // 初始化channel
             init(channel);
         } catch (Throwable t) {
             if (channel != null) {
@@ -329,9 +349,9 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
             // as the Channel is not registered yet we need to force the usage of the GlobalEventExecutor
             return new DefaultChannelPromise(new FailedChannel(), GlobalEventExecutor.INSTANCE).setFailure(t);
         }
-
+        // 将当前socket的channel注册到EventLoop中
         ChannelFuture regFuture = config().group().register(channel);
-        if (regFuture.cause() != null) {
+        if (regFuture.cause() != null) { // 简单的判断一下注册是否出现了异常（上面服务端的channel注册是异步的）
             if (channel.isRegistered()) {
                 channel.close();
             } else {
@@ -351,9 +371,16 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
         return regFuture;
     }
 
+    /**
+     * 对于客户端的SocketChannel来说，就是添加handler和解析socket参数以便后面使用 <p/>
+     * 对于服务端的ServerSocketChannel来说，不仅要将我们配置的handler和socket参数配置到ServerSocketChannel中，<br/>
+     * 还要为ServerSocketChannel配置特殊的处理器ServerBootstrapAcceptor，<br/>
+     * 用来处理ServerSocketChannel接受连接后产生的SocketChannel，还需要将我们配置的各种child配置应用到SocketChannel中
+     */
     abstract void init(Channel channel) throws Exception;
 
-    private static void doBind0(
+    // 服务端绑定address和注册OP_ACCEPT事件
+   private static void doBind0(
             final ChannelFuture regFuture, final Channel channel,
             final SocketAddress localAddress, final ChannelPromise promise) {
 

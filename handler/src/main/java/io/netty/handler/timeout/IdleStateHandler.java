@@ -513,7 +513,7 @@ public class IdleStateHandler extends ChannelDuplexHandler {
 
             long lastWriteTime = IdleStateHandler.this.lastWriteTime;
             long nextDelay = writerIdleTimeNanos - (ticksInNanos() - lastWriteTime);
-            if (nextDelay <= 0) {
+            if (nextDelay <= 0) { // 代表指定的writerIdleTimeNanos时间内没有触发写操作
                 // Writer is idle - set a new timeout and notify the callback.
                 writerIdleTimeout = schedule(ctx, this, writerIdleTimeNanos, TimeUnit.NANOSECONDS);
 

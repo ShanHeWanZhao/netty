@@ -20,7 +20,8 @@ import static io.netty.util.ByteProcessorUtils.LINE_FEED;
 import static io.netty.util.ByteProcessorUtils.SPACE;
 
 /**
- * Provides a mechanism to iterate over a collection of bytes.
+ * Provides a mechanism to iterate over a collection of bytes. <><p/>
+ * 特殊字节的识别器（换行、空格等），
  */
 public interface ByteProcessor {
     /**

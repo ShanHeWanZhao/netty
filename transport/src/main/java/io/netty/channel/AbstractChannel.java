@@ -55,7 +55,13 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
     private static final NotYetConnectedException FLUSH0_NOT_YET_CONNECTED_EXCEPTION = ThrowableUtil.unknownStackTrace(
             new NotYetConnectedException(), AbstractUnsafe.class, "flush0()");
 
+    /**
+     * 父类channel
+     */
     private final Channel parent;
+    /**
+     * 全局唯一id，和mac地址，进程，时间，等有关系
+     */
     private final ChannelId id;
     private final Unsafe unsafe;
     private final DefaultChannelPipeline pipeline;
@@ -63,7 +69,13 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
     private final CloseFuture closeFuture = new CloseFuture(this);
 
     private volatile SocketAddress localAddress;
+    /**
+     * 当前Channel的远程地址，对于ServerSocketChannel为null
+     */
     private volatile SocketAddress remoteAddress;
+    /**
+     * 当前channel注册的EventLoop
+     */
     private volatile EventLoop eventLoop;
     private volatile boolean registered;
     private boolean closeInitiated;
@@ -469,6 +481,7 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
                 promise.setFailure(new IllegalStateException("registered to an event loop already"));
                 return;
             }
+            // 判断指定的EventLoop是否和Channel兼容
             if (!isCompatible(eventLoop)) {
                 promise.setFailure(
                         new IllegalStateException("incompatible event loop type: " + eventLoop.getClass().getName()));
@@ -477,7 +490,7 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
 
             AbstractChannel.this.eventLoop = eventLoop;
 
-            if (eventLoop.inEventLoop()) {
+            if (eventLoop.inEventLoop()) { // ServerBootstrap不会走这，此时executor的thread还未初始化
                 register0(promise);
             } else {
                 try {
@@ -506,20 +519,23 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
                     return;
                 }
                 boolean firstRegistration = neverRegistered;
+                // 真正的注册(java的原生channel注册到selector上，且还未注册监听事件)
                 doRegister();
                 neverRegistered = false;
                 registered = true;
 
                 // Ensure we call handlerAdded(...) before we actually notify the promise. This is needed as the
                 // user may already fire events through the pipeline in the ChannelFutureListener.
+                // handlerAdded事件的回调接口（如果存在）
                 pipeline.invokeHandlerAddedIfNeeded();
 
                 safeSetSuccess(promise);
+                // 从HeadContext开始触发ChannelRegistered事件
                 pipeline.fireChannelRegistered();
                 // Only fire a channelActive if the channel has never been registered. This prevents firing
                 // multiple channel actives if the channel is deregistered and re-registered.
-                if (isActive()) {
-                    if (firstRegistration) {
+                if (isActive()) { // 监听成功
+                    if (firstRegistration) { // 第一次注册会调用这，向下走会注册自己感兴趣的事件
                         pipeline.fireChannelActive();
                     } else if (config().isAutoRead()) {
                         // This channel was registered before and autoRead() is set. This means we need to begin read
@@ -562,11 +578,12 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
             try {
                 doBind(localAddress);
             } catch (Throwable t) {
-                safeSetFailure(promise, t);
+                safeSetFailure(promise, t); // 设置当前的ChannelPromise为fail
                 closeIfClosed();
                 return;
             }
 
+            // 开始没激活，现在激活了，代表这是第一次激活（绑定端口和地址）
             if (!wasActive && isActive()) {
                 invokeLater(new Runnable() {
                     @Override
@@ -879,7 +896,7 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
 
             int size;
             try {
-                msg = filterOutboundMessage(msg);
+                msg = filterOutboundMessage(msg); // heap message -> direct message
                 size = pipeline.estimatorHandle().size(msg);
                 if (size < 0) {
                     size = 0;

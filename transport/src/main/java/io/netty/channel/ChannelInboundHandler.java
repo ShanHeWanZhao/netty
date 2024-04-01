@@ -43,7 +43,13 @@ public interface ChannelInboundHandler extends ChannelHandler {
     void channelInactive(ChannelHandlerContext ctx) throws Exception;
 
     /**
-     * Invoked when the current {@link Channel} has read a message from the peer.
+     * Invoked when the current {@link Channel} has read a message from the peer. <p/>
+     * 从Channel中读取了数据。在读取channel的数据时，可能由于我们分配的ByteBuf容量不够导致不能一次读取完毕，
+     * 致使我们需要循坏创建ByteBuf来承接上一次的读取，然后就会触发多次的channelRead事件，当Channel数据读取完毕后，
+     * 最终再触发一次channelReadComplete事件<p/>
+     * 为什么这个msg是Object类型的？ <p/>
+     * 因为这可能是解码后的结果，但对于第一次触发channelRead时，这个msg一定是个ByteBuf。<br/>
+     * 所以，当触发了这个方法后，msg一定不为空，且有可能已经是解码后的任意数据类型了
      */
     void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception;
 
@@ -51,7 +57,11 @@ public interface ChannelInboundHandler extends ChannelHandler {
      * Invoked when the last message read by the current read operation has been consumed by
      * {@link #channelRead(ChannelHandlerContext, Object)}.  If {@link ChannelOption#AUTO_READ} is off, no further
      * attempt to read an inbound data from the current {@link Channel} will be made until
-     * {@link ChannelHandlerContext#read()} is called.
+     * {@link ChannelHandlerContext#read()} is called. <><p/>
+     * 当所有可读的字节都已经从 Channel 中读取之后，将会调用该回调方法；
+     * 所以，可能在 channelReadComplete()被调用之前看到多次调用 channelRead() <p/>
+     * channelReadComplete和上面的channelRead方法触发都在AbstractNioByteChannel.NioByteUnsafe#read()里（SocketChannel）<br/>
+     *
      */
     void channelReadComplete(ChannelHandlerContext ctx) throws Exception;
 

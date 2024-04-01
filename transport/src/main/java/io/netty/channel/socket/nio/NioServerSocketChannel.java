@@ -57,6 +57,11 @@ public class NioServerSocketChannel extends AbstractNioMessageChannel
              *  {@link SelectorProvider#provider()} which is called by each ServerSocketChannel.open() otherwise.
              *
              *  See <a href="https://github.com/netty/netty/issues/2308">#2308</a>.
+             *  使用
+             *   {@link java.nio.channels.ServerSocketChannel#open()}
+             *   {@link java.nio.channels.SocketChannel#open()}
+             *  这种方式创建channel，在获取SelectorProvider会锁竞争，
+             *  大量创建SocketChannel会性能降低很多
              */
             return provider.openServerSocketChannel();
         } catch (IOException e) {
@@ -138,6 +143,7 @@ public class NioServerSocketChannel extends AbstractNioMessageChannel
         javaChannel().close();
     }
 
+    // 接受新的SocketChannel连接，返回1代表接受成功
     @Override
     protected int doReadMessages(List<Object> buf) throws Exception {
         SocketChannel ch = SocketUtils.accept(javaChannel());

@@ -214,7 +214,7 @@ public abstract class AbstractByteBuf extends ByteBuf {
     @Override
     public ByteBuf discardReadBytes() {
         ensureAccessible();
-        if (readerIndex == 0) {
+        if (readerIndex == 0) { // 还没开始读，就不需要丢弃
             return this;
         }
 

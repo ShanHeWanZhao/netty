@@ -47,7 +47,13 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
     private final Map<ChannelOption<?>, Object> childOptions = new LinkedHashMap<ChannelOption<?>, Object>();
     private final Map<AttributeKey<?>, Object> childAttrs = new LinkedHashMap<AttributeKey<?>, Object>();
     private final ServerBootstrapConfig config = new ServerBootstrapConfig(this);
+    /**
+     * child group，用来处理SocketChannel，处理客户端和服务器的读写
+     */
     private volatile EventLoopGroup childGroup;
+    /**
+     * 接受连接后产生的SocketChannel应该使用的Handler
+     */
     private volatile ChannelHandler childHandler;
 
     public ServerBootstrap() { }
@@ -171,6 +177,7 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
             public void initChannel(final Channel ch) throws Exception {
                 final ChannelPipeline pipeline = ch.pipeline();
                 ChannelHandler handler = config.handler();
+                // 将AbstractBootstrap的handler（handler方法的参数）添加到NioServerSocketChannel的ChannelPipeline中
                 if (handler != null) {
                     pipeline.addLast(handler);
                 }
@@ -217,7 +224,7 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
         private final Entry<AttributeKey<?>, Object>[] childAttrs;
         private final Runnable enableAutoReadTask;
 
-        ServerBootstrapAcceptor(
+       ServerBootstrapAcceptor(
                 final Channel channel, EventLoopGroup childGroup, ChannelHandler childHandler,
                 Entry<ChannelOption<?>, Object>[] childOptions, Entry<AttributeKey<?>, Object>[] childAttrs) {
             this.childGroup = childGroup;
@@ -238,9 +245,17 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
             };
         }
 
+        /**
+         * 为服务端接受连接后新创建的SocketChannel配置属性
+         * 包括：ChannelHandler（childHandler）、设置Option和Attribute
+         * 最后再将这个SocketChannel注册到WorkerGroup中的一个EventLoop上
+         * @param ctx
+         * @param msg
+         */
         @Override
         @SuppressWarnings("unchecked")
         public void channelRead(ChannelHandlerContext ctx, Object msg) {
+           // 这是服务端接收连接后新创建的NioSocketChannel
             final Channel child = (Channel) msg;
 
             child.pipeline().addLast(childHandler);
@@ -252,6 +267,7 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
             }
 
             try {
+                // 将SocketChannel注册到workerGroup中的Selector去
                 childGroup.register(child).addListener(new ChannelFutureListener() {
                     @Override
                     public void operationComplete(ChannelFuture future) throws Exception {

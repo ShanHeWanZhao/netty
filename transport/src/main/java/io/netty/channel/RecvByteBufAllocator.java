@@ -96,7 +96,9 @@ public interface RecvByteBufAllocator {
         int attemptedBytesRead();
 
         /**
-         * Determine if the current read loop should continue.
+         * Determine if the current read loop should continue. <p/>
+         * 判断是否应该继续从Channel中读取数据 <p/>
+         * 当上次读取到的数据容量等于我们准备的ByteBuf容量时，代表很大可能还没读取完，返回true继续读取数据
          * @return {@code true} if the read loop should continue reading. {@code false} if the read loop is complete.
          */
         boolean continueReading();

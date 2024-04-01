@@ -70,7 +70,7 @@ public final class InternalThreadLocalMap extends UnpaddedInternalThreadLocalMap
         if (thread instanceof FastThreadLocalThread) {
             return fastGet((FastThreadLocalThread) thread);
         } else {
-            return slowGet();
+            return slowGet(); // 获取放在ThreadLocal中的InternalThreadLocalMap，因为比这里实现的慢，所以叫慢获取
         }
     }
 
